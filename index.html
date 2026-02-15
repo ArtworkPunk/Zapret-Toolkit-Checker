@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zapret Toolkit | TCP 16-20 Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="white.png">
+    <style>
+        body { 
+            font-family: 'JetBrains Mono', monospace; 
+            background-color: #0f1115; 
+            color: #d4d4d4; 
+            overflow-x: hidden;
+        }
+        .grid-bg { 
+            background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); 
+            background-size: 30px 30px; 
+        }
+        .bg-glow {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(8, 145, 178, 0.05) 0%, transparent 80%);
+            pointer-events: none; z-index: -1;
+        }
+        .card { 
+            background: rgba(22, 24, 29, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .card:hover { 
+            border-color: #0891b2; 
+            transform: translateY(-3px);
+            background: rgba(28, 31, 38, 1);
+        }
+
+        .status-badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 2px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+        .bg-ok { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); }
+        .bg-fail { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4); }
+        .bg-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
+        .bg-wait { background: rgba(255, 255, 255, 0.05); color: #71717a; border: 1px solid rgba(255, 255, 255, 0.1); }
+
+        .btn-action { 
+            background: linear-gradient(135deg, #0e7490 0%, #0891b2 100%);
+            box-shadow: 0 0 25px rgba(8, 145, 178, 0.3);
+            transition: 0.3s;
+        }
+        .btn-action:hover { box-shadow: 0 0 40px rgba(8, 145, 178, 0.6); transform: scale(1.02); }
+        .btn-action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .provider-tag { font-size: 0.55rem; color: #6b7280; text-transform: uppercase; border: 1px solid #374151; padding: 1px 4px; border-radius: 3px; }
+        
+        .log-container { background: #050505; border-top: 1px solid #1f2937; font-size: 10px; height: 120px; overflow-y: auto; color: #9ca3af; padding: 10px; }
+        .log-entry { margin-bottom: 2px; font-family: monospace; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #374151; }
+
+        @keyframes pulse-bar { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+        .scanning .bar { animation: pulse-bar 1s infinite; background: #0891b2; }
+    </style>
+</head>
+<body class="grid-bg min-h-screen flex flex-col">
+    <div class="bg-glow"></div>
+
+    <div class="max-w-7xl mx-auto p-6 md:p-12 flex-grow w-full">
+        <!-- HEADER -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 gap-8">
+            <div>
+                <h1 class="text-5xl font-black text-white tracking-tighter mb-4 italic uppercase">Zapret <span style="text-transform: none;" class="text-cyan-500 italic font-light text-2xl ">Toolkit</span></h1>
+                <div class="flex items-center gap-6 text-[10px] tracking-[2px] text-gray-500 font-bold uppercase">
+                    <span class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div> TCP 16-20 Analyzer</span>
+                    <span id="user-ip" class="border-l border-white/10 pl-6 text-cyan-600">IP: DETECTING...</span>
+                </div>
+            </div>
+            <button id="startBtn" onclick="runDiagnostics()" class="btn-action px-12 py-4 text-white font-black rounded-sm active:scale-95 uppercase text-xs tracking-[3px]">
+                Run Heavy Test
+            </button>
+        </div>
+
+        <!-- GRID -->
+        <div id="grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-10"></div>
+        
+        <!-- LOGS -->
+        <div class="mb-10 border border-white/10 rounded-sm overflow-hidden">
+             <div class="bg-[#0f1115] px-4 py-2 text-[10px] uppercase font-bold text-gray-500 border-b border-white/10 flex justify-between">
+                <span>Real-time Log</span>
+                <span>Verbose Mode</span>
+             </div>
+             <div id="log-box" class="log-container">
+                 <div>> Ready to scan...</div>
+             </div>
+        </div>
+
+        <!-- INFO -->
+        <div class="border-t border-white/10 pt-10 grid grid-cols-1 md:grid-cols-3 gap-12 text-[11px] text-gray-500 leading-relaxed">
+            <div>
+                <h3 class="text-green-500 font-bold text-sm uppercase mb-3">Stable (Success)</h3>
+                <p>Соединение стабильно. Загружены и малый пакет (Handshake), и тяжелый контент (>50KB). Блокировок по объему данных нет.</p>
+            </div>
+            <div>
+                <h3 class="text-yellow-500 font-bold text-sm uppercase mb-3">TCP Freeze (16-20KB)</h3>
+                <p>Малый пакет прошел, но при попытке скачать большой файл соединение «зависло». Это признак новой системы фильтрации РКН для зарубежных хостингов.</p>
+            </div>
+            <div>
+                <h3 class="text-red-500 font-bold text-sm uppercase mb-3">Blocked / DPI</h3>
+                <p>Соединение сброшено сразу (RST) или полная потеря пакетов. Это стандартная блокировка по IP или доменному имени.</p>
+            </div>
+            <div>
+                <h3 style="letter-spacing:5px; position: absolute;">Взять за основу 16-20 checker от hyperion-cs</h3>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = { 
+            timeoutSmall: 4000, 
+            timeoutLarge: 10000, // Увеличенный таймаут для тяжелых файлов
+            doh: "https://dns.google/resolve?name=" 
+        };
+
+        // Список целей с указанием провайдера/CDN и "тяжелого" файла для теста
+        // ВАЖНО: Ссылки ведут на реальные большие картинки или файлы
+        const targets = [
+            // Игровые сервисы и CDN
+            { name: "Steam Store", host: "store.steampowered.com", provider: "Akamai", large: "https://cdn.akamai.steamstatic.com/steam/apps/570/header.jpg" },
+            { name: "Epic Games", host: "store.epicgames.com", provider: "Amazon Cloudfront", large: "https://cdn2.unrealengine.com/eg-logo-filled-1200x1200-c7066922572a.png" },
+            { name: "Battle.net", host: "battle.net", provider: "Lumen / EdgeCast", large: "https://bnet.msecnd.net/static/images/nav/logos/logo-battle-net.png" },
+            { name: "Discord Media", host: "discord.com", provider: "Cloudflare / i3D", large: "https://cdn.discordapp.com/assets/og_img_discord_home.png" },
+            { name: "EA Origin", host: "origin.com", provider: "Akamai", large: "https://origin-a.akamaihd.net/EA-Desktop-Client-Download/installer-releases/EADesktopInstaller.exe" }, 
+            { name: "Ubisoft", host: "ubisoft.com", provider: "Akamai", large: "https://staticctf.akamaized.net/J3yJr34U2pZ2Ieem48D54hapjZ-dn65o.jpg" },
+            
+            // Соцсети и Медиа
+            { name: "YouTube", host: "www.youtube.com", provider: "Google LLC", large: "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" },
+            { name: "Instagram", host: "www.instagram.com", provider: "Meta / Facebook", large: "https://static.xx.fbcdn.net/rsrc.php/yD/r/d4ZIVX-5C-b.ico" }, 
+            { name: "X / Twitter", host: "twitter.com", provider: "X Corp", large: "https://abs.twimg.com/icons/apple-touch-icon-192x192.png" },
+            { name: "Facebook", host: "www.facebook.com", provider: "Meta", large: "https://static.xx.fbcdn.net/rsrc.php/y8/r/dF5SId3UHWd.svg" },
+            { name: "SoundCloud", host: "soundcloud.com", provider: "Fastly", large: "https://a-v2.sndcdn.com/assets/images/sc-icons/favicon-2cadd14bdb.ico" },
+            { name: "Telegram", host: "telegram.org", provider: "Telegram", large: "https://telegram.org/img/t_logo.png" },
+            { name: "Pinterest", host: "www.pinterest.com", provider: "Fastly / Akamai", large: "https://s.pinimg.com/images/facebook_share_image.png" },
+            { name: "Twitch", host: "www.twitch.tv", provider: "Amazon IVS", large: "https://static-cdn.jtvnw.net/ttv-static/brand/Twitch_Purple_RGB.png" },
+
+            // Облака и Хостинги (Главные жертвы блокировок 16-20)
+            { name: "Hetzner", host: "www.hetzner.com", provider: "Hetzner Online", large: "https://www.hetzner.com/assets/images/header/fs-line-cloud.jpg" },
+            { name: "DigitalOcean", host: "www.digitalocean.com", provider: "DigitalOcean", large: "https://www.digitalocean.com/_next/static/media/hero-background.8f8a8.png" },
+            { name: "AWS Amazon", host: "aws.amazon.com", provider: "Amazon.com", large: "https://d1.awsstatic.com/logos/aws-logo-lockups/poweredbyaws/PB_AWS_logo_RGB_stacked_REV_SQ.png" },
+            { name: "Oracle", host: "www.oracle.com", provider: "Oracle Cloud", large: "https://www.oracle.com/asset/web/i/o-logo.png" },
+            
+            // Инфраструктура
+            { name: "Cloudflare", host: "www.cloudflare.com", provider: "Cloudflare", large: "https://www.cloudflare.com/img/cf-facebook-card.png" },
+            { name: "Fastly", host: "www.fastly.com", provider: "Fastly", large: "https://www.fastly.com/images/fastly-logo.png" },
+            { name: "Akamai", host: "www.akamai.com", provider: "Akamai", large: "https://www.akamai.com/site/im-demo/flow-player/poster.jpg" },
+            
+            // Контроль
+            { name: "GosUslugi", host: "www.gosuslugi.ru", provider: "Rostelecom", large: "https://gu-st.ru/content/l7_logo_2024.svg" },
+            { name: "Rostelecom", host: "www.rt.ru", provider: "Rostelecom", large: "https://www.rt.ru//assets/img/logo.svg" }
+        ];
+
+        function init() {
+            fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => document.getElementById('user-ip').innerText = `IP: ${d.ip}`);
+            const container = document.getElementById('grid');
+            container.innerHTML = targets.map(t => {
+                const id = t.host.replace(/[\.\/]/g, '-');
+                return `
+                <div id="card-${id}" class="card p-6 rounded-sm flex flex-col justify-between min-h-[160px]">
+                    <div>
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-white font-bold text-[10px] uppercase tracking-wider">${t.name}</span>
+                            <span id="status-${id}" class="status-badge bg-wait text-gray-500">READY</span>
+                        </div>
+                        <div class="mb-4">
+                             <span class="provider-tag">${t.provider}</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-[9px]">
+                                <span class="text-gray-600 font-bold">1KB PROBE</span>
+                                <span id="small-${id}" class="text-gray-500">---</span>
+                            </div>
+                            <div class="flex justify-between text-[9px]">
+                                <span class="text-gray-600 font-bold">50KB PROBE</span>
+                                <span id="large-${id}" class="text-gray-500">---</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="absolute bottom-0 left-0 w-full h-[3px] bg-white/5">
+                        <div id="bar-${id}" class="h-full w-0 bg-cyan-600 transition-all duration-300"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function log(msg, color = "#9ca3af") {
+            const box = document.getElementById('log-box');
+            const div = document.createElement('div');
+            div.className = "log-entry";
+            div.style.color = color;
+            div.innerText = `> ${msg}`;
+            box.prepend(div);
+        }
+
+        function checkResource(url, timeout) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                const start = Date.now();
+                let finished = false;
+
+                const done = (result) => {
+                    if (finished) return;
+                    finished = true;
+                    resolve({ ok: result, time: Date.now() - start });
+                };
+
+                img.onload = () => done(true);
+                img.onerror = () => done(false); // Для 403/404 тоже считаем что коннект есть
+                
+                // Таймаут = разрыв соединения или блокировка
+                setTimeout(() => done('timeout'), timeout);
+                
+                // Анти-кэш
+                img.src = url + (url.includes('?') ? '&' : '?') + 't=' + Math.random();
+            });
+        }
+
+        async function testSite(site) {
+            const id = site.host.replace(/[\.\/]/g, '-');
+            const statusEl = document.getElementById(`status-${id}`);
+            const smallEl = document.getElementById(`small-${id}`);
+            const largeEl = document.getElementById(`large-${id}`);
+            const bar = document.getElementById(`bar-${id}`);
+            const card = document.getElementById(`card-${id}`);
+
+            statusEl.innerText = "TESTING";
+            statusEl.className = "status-badge bg-wait text-cyan-400";
+            card.classList.add('scanning');
+            log(`Starting test for ${site.name}...`);
+
+            // 1. SMALL PACKET TEST (Favicon)
+            const smallRes = await checkResource(`https://${site.host}/favicon.ico`, config.timeoutSmall);
+            
+            if (smallRes.ok === 'timeout') {
+                smallEl.innerText = "TIMEOUT";
+                smallEl.className = "text-red-500 font-bold";
+                statusEl.innerText = "BLOCKED 🚫";
+                statusEl.className = "status-badge bg-fail";
+                bar.style.width = "100%";
+                bar.style.backgroundColor = "#ef4444";
+                card.classList.remove('scanning');
+                log(`${site.name} blocked on handshake (Phase 1).`, "#ef4444");
+                return;
+            } else {
+                smallEl.innerText = smallRes.time + "ms";
+                smallEl.className = "text-green-500";
+                log(`${site.name} handshake success (${smallRes.time}ms).`, "#22c55e");
+            }
+
+            // 2. LARGE PACKET TEST (TCP 16-20 Limit)
+            bar.style.width = "50%";
+            const largeRes = await checkResource(site.large, config.timeoutLarge);
+
+            if (largeRes.ok === 'timeout') {
+                largeEl.innerText = "FROZEN";
+                largeEl.className = "text-yellow-500 font-bold";
+                statusEl.innerText = "TCP LIMIT ⚠️";
+                statusEl.className = "status-tag bg-warn";
+                bar.style.backgroundColor = "#f59e0b";
+                log(`${site.name} froze on large packet (TCP 16-20 Detected).`, "#f59e0b");
+            } else {
+                largeEl.innerText = largeRes.time + "ms";
+                largeEl.className = "text-green-500";
+                statusEl.innerText = "STABLE ✅";
+                statusEl.className = "status-tag bg-ok";
+                bar.style.backgroundColor = "#22c55e";
+                log(`${site.name} fully stable.`, "#22c55e");
+            }
+            
+            bar.style.width = "100%";
+            card.classList.remove('scanning');
+        }
+
+        async function runDiagnostics() {
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('startBtn').innerText = "Analyzing...";
+            document.getElementById('log-box').innerHTML = '';
+            
+            // Reset UI
+            targets.forEach(t => {
+                const id = t.host.replace(/[\.\/]/g, '-');
+                document.getElementById(`status-${id}`).innerText = "READY";
+                document.getElementById(`status-${id}`).className = "status-badge bg-wait text-gray-500";
+                document.getElementById(`bar-${id}`).style.width = "0%";
+                document.getElementById(`small-${id}`).innerText = "---";
+                document.getElementById(`large-${id}`).innerText = "---";
+            });
+
+            // Параллельный запуск
+            await Promise.all(targets.map(site => testSite(site)));
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').innerText = "Run Heavy Test";
+            log("DIAGNOSTICS COMPLETE.", "#0891b2");
+        }
+        
+        window.onload = init;
+    </script>
+</body>
+</html>
